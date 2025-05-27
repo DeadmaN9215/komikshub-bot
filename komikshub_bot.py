@@ -2,7 +2,6 @@ import os
 import sqlite3
 import asyncio
 import requests
-from webdav3.client import Client  # Добавляем библиотеку для WebDAV
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandStart
@@ -29,15 +28,7 @@ bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
 dp = Dispatcher()
 
 # Публичная ссылка на файл базы данных в Mail.ru Cloud
-DATABASE_URL = "https://cloud.mail.ru/public/3VX7/ppkUqGWHF"  # Замени на свою публичную ссылку
-
-# Настройки WebDAV для Mail.ru Cloud
-webdav_options = {
-    'webdav_hostname': "https://webdav.cloud.mail.ru",
-    'webdav_login': "deadman_15@mail.ru",  # Замени на свой email
-    'webdav_password': "XkxpTJwpN3ifucfSAh6v"     # Замени на свой пароль для WebDAV
-}
-webdav_client = Client(webdav_options)
+DATABASE_URL = "https://cloud.mail.ru/public/3VX7/ppkUqGWHF"  # Укажи правильную прямую ссылку
 
 # Скачивание файла базы данных из облака
 print("Скачивание базы данных из облака...")
@@ -47,6 +38,14 @@ try:
     with open(database_file, 'wb') as f:
         f.write(response.content)
     print("База данных успешно скачана.")
+    # Проверяем, что скачали
+    with open(database_file, 'rb') as f:
+        first_bytes = f.read(16).decode('utf-8', errors='ignore')
+        print(f"Первые 16 байт файла: {first_bytes}")
+        if first_bytes.startswith('SQLite'):
+            print("Файл выглядит как база данных SQLite.")
+        else:
+            print("Скачанный файл не является базой данных SQLite (возможно, это HTML-страница).")
 except Exception as e:
     print(f"Ошибка при скачивании базы данных: {e}")
 
@@ -81,8 +80,6 @@ def initialize_database():
         temp_conn.commit()
         temp_conn.close()
         print("Новая база данных создана с начальными данными.")
-        # Загружаем новую базу в облако
-        upload_database_to_cloud()
 
 # Подключение к базе данных SQLite с поддержкой UTF-8
 print("Подключение к базе данных...")
@@ -123,18 +120,8 @@ def ensure_database_populated():
                             "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
             conn.commit()
             print("Начальные данные успешно добавлены.")
-            upload_database_to_cloud()
     except Exception as e:
         print(f"Ошибка при проверке содержимого базы данных: {e}")
-
-# Функция для загрузки файла базы данных в облако
-def upload_database_to_cloud():
-    print("Загрузка базы данных в облако...")
-    try:
-        webdav_client.upload_sync(remote_path="/BDCharter/comics_characters.db", local_path="comics_characters.db")
-        print("База данных успешно загружена в облако.")
-    except Exception as e:
-        print(f"Ошибка при загрузке базы данных в облако: {e}")
 
 # Проверяем валидность базы данных
 initialize_database()
@@ -267,9 +254,6 @@ async def process_art_link(message: types.Message, state: FSMContext):
         conn.commit()
         await message.reply(f"Персонаж {name} успешно добавлен! 🎉")
         print(f"Администратор {message.from_user.id} добавил персонажа: {name}")
-
-        # Загружаем обновлённую базу данных в облако
-        upload_database_to_cloud()
     except Exception as e:
         await message.reply(f"Ошибка при добавлении персонажа: {e}")
         print(f"Ошибка при добавлении персонажа администратором {message.from_user.id}: {e}")
@@ -368,6 +352,7 @@ async def handle_search_query(message: types.Message, state: FSMContext):
 # Обработка выбора персонажа из списка
 @dp.callback_query(lambda c: c.data.startswith("select_"))
 async def handle_selection(callback_query: types.CallbackQuery):
+    print(f"Функция handle_selection вызвана для callback_query: {callback_query}")
     selected_name = callback_query.data.split("_", 1)[1]  # Исправляем split, чтобы обработать имена с пробелами
     print(f"Пользователь {callback_query.from_user.id} выбрал персонажа: {selected_name}")
     try:
@@ -403,6 +388,8 @@ async def handle_selection(callback_query: types.CallbackQuery):
     except Exception as db_error:
         print(f"Ошибка при запросе к базе данных: {db_error}")
         await callback_query.message.reply(f"Произошла ошибка при доступе к базе данных: {db_error}")
+    finally:
+        print(f"Завершение обработки callback_query для пользователя {callback_query.from_user.id}")
     await callback_query.answer()
 
 # Обработка текстовых сообщений, когда пользователь не в режиме поиска
