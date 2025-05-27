@@ -28,7 +28,7 @@ bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
 dp = Dispatcher()
 
 # Публичная ссылка на файл базы данных в Mail.ru Cloud
-DATABASE_URL = "https://cloud.mail.ru/public/XXXX/YYYY"  # Замени на свою публичную ссылку
+DATABASE_URL = "https://cloud.mail.ru/public/BNwh/Hq44eaDD8"  # Замени на свою публичную ссылку
 
 # Скачивание файла базы данных из облака
 print("Скачивание базы данных из облака...")
