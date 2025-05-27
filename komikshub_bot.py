@@ -67,7 +67,7 @@ try:
 except Exception as e:
     print(f"Ошибка при проверке содержимого базы данных: {e}")
 
-# Создание главного меню с кнопками (без кроссовера)
+# Создание главного меню с кнопками
 menu = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="🔍 Поиск", callback_data="search")],
     [InlineKeyboardButton(text="🎲 Случайный", callback_data="random")]
@@ -292,6 +292,12 @@ async def handle_selection(callback_query: types.CallbackQuery):
     selected_name = callback_query.data.split("_", 1)[1]  # Исправляем split, чтобы обработать имена с пробелами
     print(f"Пользователь {callback_query.from_user.id} выбрал персонажа: {selected_name}")
     try:
+        # Проверяем содержимое базы данных перед запросом
+        cursor.execute("SELECT * FROM characters")
+        all_characters = cursor.fetchall()
+        print(f"Все персонажи в базе перед выбором: {all_characters}")
+
+        # Ищем персонажа
         cursor.execute("SELECT * FROM characters WHERE name = ?", (selected_name,))
         result = cursor.fetchone()
         print(f"Результат запроса к базе данных: {result}")
@@ -300,22 +306,31 @@ async def handle_selection(callback_query: types.CallbackQuery):
             buttons = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Арт", url=art)]
             ])
-            await callback_query.message.reply(
-                f"🦸 {name}\n📚 Издатель: {publisher}\n🌌 Вселенная: {universe}\n🦸 Тип: {type_}\n📖 {desc}\n📜 Пост: {link}",
-                reply_markup=buttons
-            )
-            print(f"Пользователь {callback_query.from_user.id}: информация о персонаже {name} отправлена")
+            try:
+                await callback_query.message.reply(
+                    f"🦸 {name}\n📚 Издатель: {publisher}\n🌌 Вселенная: {universe}\n🦸 Тип: {type_}\n📖 {desc}\n📜 Пост: {link}",
+                    reply_markup=buttons
+                )
+                print(f"Пользователь {callback_query.from_user.id}: информация о персонаже {name} отправлена")
+            except Exception as send_error:
+                print(f"Ошибка при отправке сообщения в Telegram: {send_error}")
+                await callback_query.message.reply(f"Не удалось отправить информацию: {send_error}")
         else:
             await callback_query.message.reply("Персонаж не найден в базе данных. 😔")
             print(f"Пользователь {callback_query.from_user.id}: персонаж {selected_name} не найден в базе данных")
-    except Exception as e:
-        print(f"Ошибка при запросе к базе данных: {e}")
-        await callback_query.message.reply(f"Произошла ошибка: {e}")
+    except Exception as db_error:
+        print(f"Ошибка при запросе к базе данных: {db_error}")
+        await callback_query.message.reply(f"Произошла ошибка при доступе к базе данных: {db_error}")
     await callback_query.answer()
 
 # Обработка текстовых сообщений, когда пользователь не в режиме поиска
 @dp.message()
 async def handle_text(message: types.Message, state: FSMContext):
+    # Игнорируем пустые сообщения или сообщения без текста
+    if not message.text:
+        print(f"Сообщение пользователя {message.from_user.id} проигнорировано: текст отсутствует")
+        return
+
     print(f"Пользователь {message.from_user.id} ввёл текст: {message.text}")
     # Игнорируем сообщения в группах
     if message.chat.type in ["group", "supergroup"]:
