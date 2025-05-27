@@ -41,23 +41,59 @@ webdav_client = Client(webdav_options)
 
 # Скачивание файла базы данных из облака
 print("Скачивание базы данных из облака...")
+database_file = 'comics_characters.db'
 try:
     response = requests.get(DATABASE_URL)
-    with open('comics_characters.db', 'wb') as f:
+    with open(database_file, 'wb') as f:
         f.write(response.content)
     print("База данных успешно скачана.")
 except Exception as e:
     print(f"Ошибка при скачивании базы данных: {e}")
 
+# Проверка валидности базы данных
+def initialize_database():
+    print("Проверка валидности базы данных...")
+    try:
+        temp_conn = sqlite3.connect(database_file)
+        temp_cursor = temp_conn.cursor()
+        temp_cursor.execute("SELECT * FROM sqlite_master WHERE type='table';")
+        temp_conn.close()
+        print("Файл является валидной базой данных SQLite.")
+    except sqlite3.DatabaseError as e:
+        print(f"Файл не является валидной базой данных: {e}")
+        print("Создаём новую базу данных...")
+        # Создаём новую базу, если скачанный файл недействителен
+        with open(database_file, 'wb') as f:
+            pass  # Очищаем файл
+        temp_conn = sqlite3.connect(database_file)
+        temp_cursor = temp_conn.cursor()
+        temp_cursor.execute('''CREATE TABLE IF NOT EXISTS characters
+                              (name TEXT, publisher TEXT, universe TEXT, type TEXT, description TEXT, post_link TEXT, art_link TEXT)''')
+        # Добавляем начальные данные
+        temp_cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            ("Человек-паук Нуар", "Marvel", "Marvel Noir", "Герой",
+                             "Мрачный Питер Паркер из 1930-х, мститель с револьвером.",
+                             "https://t.me/KomicsHub/3", "https://t.me/KomicsHub/4"))
+        temp_cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            ("Спаун", "Image", "Spawn Universe", "Антигерой",
+                             "Эл Симмонс, наемник, ставший мстителем ада с цепями.",
+                             "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
+        temp_conn.commit()
+        temp_conn.close()
+        print("Новая база данных создана с начальными данными.")
+        # Загружаем новую базу в облако
+        upload_database_to_cloud()
+
 # Подключение к базе данных SQLite с поддержкой UTF-8
 print("Подключение к базе данных...")
 try:
-    conn = sqlite3.connect('comics_characters.db')
+    conn = sqlite3.connect(database_file)
     cursor = conn.cursor()
     conn.execute('PRAGMA encoding = "UTF-8";')
     print("База данных успешно подключена.")
 except Exception as e:
     print(f"Ошибка подключения к базе данных: {e}")
+    raise
 
 # Создание таблицы в базе данных
 print("Создание таблицы characters...")
@@ -87,6 +123,7 @@ def ensure_database_populated():
                             "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
             conn.commit()
             print("Начальные данные успешно добавлены.")
+            upload_database_to_cloud()
     except Exception as e:
         print(f"Ошибка при проверке содержимого базы данных: {e}")
 
@@ -99,8 +136,8 @@ def upload_database_to_cloud():
     except Exception as e:
         print(f"Ошибка при загрузке базы данных в облако: {e}")
 
-# Вызываем функцию при запуске
-ensure_database_populated()
+# Проверяем валидность базы данных
+initialize_database()
 
 # Создание главного меню с кнопками
 menu = InlineKeyboardMarkup(inline_keyboard=[
