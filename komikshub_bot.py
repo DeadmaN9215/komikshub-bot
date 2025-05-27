@@ -45,27 +45,30 @@ try:
 except Exception as e:
     print(f"Ошибка при создании таблицы: {e}")
 
-# Проверка содержимого базы данных
-print("Проверка содержимого базы данных...")
-try:
-    cursor.execute("SELECT * FROM characters")
-    results = cursor.fetchall()
-    print(f"Данные в базе: {results}")
-    if not results:
-        print("ВНИМАНИЕ: База данных пуста! Добавляем начальные данные...")
-        # Добавление начальных данных только если база пуста
-        cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       ("Человек-паук Нуар", "Marvel", "Marvel Noir", "Герой",
-                        "Мрачный Питер Паркер из 1930-х, мститель с револьвером.",
-                        "https://t.me/KomicsHub/3", "https://t.me/KomicsHub/4"))
-        cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
-                       ("Спаун", "Image", "Spawn Universe", "Антигерой",
-                        "Эл Симмонс, наемник, ставший мстителем ада с цепями.",
-                        "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
-        conn.commit()
-        print("Начальные данные успешно добавлены.")
-except Exception as e:
-    print(f"Ошибка при проверке содержимого базы данных: {e}")
+# Функция для проверки и заполнения базы данных
+def ensure_database_populated():
+    print("Проверка содержимого базы данных...")
+    try:
+        cursor.execute("SELECT * FROM characters")
+        results = cursor.fetchall()
+        print(f"Данные в базе: {results}")
+        if not results:
+            print("ВНИМАНИЕ: База данных пуста! Добавляем начальные данные...")
+            cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           ("Человек-паук Нуар", "Marvel", "Marvel Noir", "Герой",
+                            "Мрачный Питер Паркер из 1930-х, мститель с револьвером.",
+                            "https://t.me/KomicsHub/3", "https://t.me/KomicsHub/4"))
+            cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           ("Спаун", "Image", "Spawn Universe", "Антигерой",
+                            "Эл Симмонс, наемник, ставший мстителем ада с цепями.",
+                            "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
+            conn.commit()
+            print("Начальные данные успешно добавлены.")
+    except Exception as e:
+        print(f"Ошибка при проверке содержимого базы данных: {e}")
+
+# Вызываем функцию при запуске
+ensure_database_populated()
 
 # Создание главного меню с кнопками
 menu = InlineKeyboardMarkup(inline_keyboard=[
@@ -214,6 +217,7 @@ async def handle_buttons(callback_query: types.CallbackQuery, state: FSMContext)
         print(f"Пользователь {callback_query.from_user.id} перешёл в режим поиска")
     elif data == "random":
         print(f"Выполняется запрос на случайного персонажа...")
+        ensure_database_populated()  # Перезаполняем базу перед запросом
         cursor.execute("SELECT * FROM characters ORDER BY RANDOM() LIMIT 1")
         result = cursor.fetchone()
         if result:
@@ -237,6 +241,9 @@ async def handle_search_query(message: types.Message, state: FSMContext):
     query = message.text.lower().strip().replace("-", " ").replace("  ", " ")  # Убираем лишние пробелы и дефисы
     query_parts = query.split()  # Разбиваем запрос на слова
     print(f"Запрос пользователя {message.from_user.id}: {query} (разбит на части: {query_parts})")
+
+    # Перезаполняем базу перед запросом
+    ensure_database_populated()
 
     # Получаем все записи из базы данных
     cursor.execute("SELECT * FROM characters")
@@ -292,6 +299,9 @@ async def handle_selection(callback_query: types.CallbackQuery):
     selected_name = callback_query.data.split("_", 1)[1]  # Исправляем split, чтобы обработать имена с пробелами
     print(f"Пользователь {callback_query.from_user.id} выбрал персонажа: {selected_name}")
     try:
+        # Перезаполняем базу перед запросом
+        ensure_database_populated()
+
         # Проверяем содержимое базы данных перед запросом
         cursor.execute("SELECT * FROM characters")
         all_characters = cursor.fetchall()
