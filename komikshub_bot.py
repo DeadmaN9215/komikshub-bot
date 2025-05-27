@@ -67,7 +67,7 @@ try:
     conn.commit()
     print("Данные успешно добавлены.")
 except Exception as e:
-    print(f"Ошибка при добавления данных: {e}")
+    print(f"Ошибка при добавлении данных: {e}")
 
 # Проверка содержимого базы данных
 print("Проверка содержимого базы данных...")
@@ -415,6 +415,11 @@ web_app.add_routes([web.get('/healthcheck', handle_health)])
 
 # Запуск polling и HTTP-сервера
 async def main():
+    # Удаляем вебхук перед запуском polling
+    print("Удаление существующего вебхука...")
+    await bot.delete_webhook(drop_pending_updates=True)
+    print("Вебхук удалён, запускаем polling...")
+
     # Запуск HTTP-сервера для health checks
     runner = web.AppRunner(web_app)
     await runner.setup()
