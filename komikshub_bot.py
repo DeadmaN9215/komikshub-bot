@@ -414,7 +414,7 @@ async def handle_text(message: types.Message, state: FSMContext):
 # Flask endpoint для обработки webhook
 @app.route(f"/{os.getenv('TELEGRAM_TOKEN')}", methods=["POST"])
 async def webhook():
-    update = await request.get_json()
+    update = request.get_json()
     await dp.feed_raw_update(bot, update)
     return {"ok": True}
 
