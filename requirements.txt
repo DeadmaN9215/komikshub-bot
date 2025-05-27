@@ -1,4 +1,4 @@
 aiogram==3.13.1
 fuzzywuzzy==0.18.0
 python-Levenshtein==0.25.1
-flask==3.0.3
+flask[async]==3.0.3
