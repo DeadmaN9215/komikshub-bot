@@ -3,4 +3,3 @@ fuzzywuzzy==0.18.0
 python-Levenshtein==0.25.1
 flask[async]==3.0.3
 gunicorn==22.0.0
-uvicorn==0.32.0
