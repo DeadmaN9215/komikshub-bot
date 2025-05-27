@@ -273,6 +273,7 @@ async def process_vote(callback_query: types.CallbackQuery):
 # Обработка текстовых сообщений (поиск в личных чатах)
 @dp.message(SearchStates.waiting_for_query)
 async def handle_search_query(message: types.Message, state: FSMContext):
+    print(f"Пользователь {message.from_user.id} отправил запрос в состоянии waiting_for_query")
     query = message.text.lower().strip().replace("-", " ").replace("  ", " ")  # Убираем лишние пробелы и дефисы
     query_parts = query.split()  # Разбиваем запрос на слова
     print(f"Запрос пользователя {message.from_user.id}: {query} (разбит на части: {query_parts})")
@@ -280,6 +281,7 @@ async def handle_search_query(message: types.Message, state: FSMContext):
     # Получаем все записи из базы данных
     cursor.execute("SELECT * FROM characters")
     all_characters = cursor.fetchall()
+    print(f"Все персонажи в базе: {all_characters}")
     results = []
 
     # Нечёткий поиск: проверяем каждую запись
@@ -289,9 +291,10 @@ async def handle_search_query(message: types.Message, state: FSMContext):
         max_score = 0
         for part in query_parts:
             score = fuzz.partial_ratio(part, combined_text)
+            print(f"Сравниваем '{part}' с '{combined_text}': score={score}")
             if score > max_score:
                 max_score = score
-        if max_score >= 70:
+        if max_score >= 50:  # Порог уже снижен до 50
             results.append(character)
             print(f"Персонаж {name} найден с уровнем сходства {max_score}%")
 
@@ -309,6 +312,7 @@ async def handle_search_query(message: types.Message, state: FSMContext):
                 reply_markup=buttons
             )
             print(f"Пользователь {message.from_user.id}: найден 1 персонаж: {name}")
+            await state.clear()  # Сбрасываем состояние после успешного поиска
         else:
             buttons = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{result[0]} ({result[1]})", callback_data=f"select_{result[0]}")] for result in results
@@ -318,27 +322,35 @@ async def handle_search_query(message: types.Message, state: FSMContext):
     else:
         await message.reply("Персонаж не найден! Попробуй другой запрос. 😎")
         print(f"Пользователь {message.from_user.id}: персонажи не найдены для запроса '{query}'")
+        await state.clear()  # Сбрасываем состояние, если ничего не найдено
 
-    # Не сбрасываем состояние, чтобы пользователь мог продолжить поиск
-    print(f"Пользователь {message.from_user.id} остаётся в режиме поиска")
+    print(f"Пользователь {message.from_user.id}: текущее состояние после обработки: {await state.get_state()}")
 
 # Обработка выбора персонажа из списка
 @dp.callback_query(lambda c: c.data.startswith("select_"))
 async def handle_selection(callback_query: types.CallbackQuery):
-    selected_name = callback_query.data.split("_")[1]
+    selected_name = callback_query.data.split("_", 1)[1]  # Исправляем split, чтобы обработать имена с пробелами
     print(f"Пользователь {callback_query.from_user.id} выбрал персонажа: {selected_name}")
-    cursor.execute("SELECT * FROM characters WHERE name = ?", (selected_name,))
-    result = cursor.fetchone()
-    if result:
-        name, publisher, universe, type_, desc, link, art = result
-        buttons = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Арт", url=art)]
-        ])
-        await callback_query.message.reply(
-            f"🦸 {name}\n📚 Издатель: {publisher}\n🌌 Вселенная: {universe}\n🦸 Тип: {type_}\n📖 {desc}\n📜 Пост: {link}",
-            reply_markup=buttons
-        )
-        print(f"Пользователь {callback_query.from_user.id}: информация о персонаже {name} отправлена")
+    try:
+        cursor.execute("SELECT * FROM characters WHERE name = ?", (selected_name,))
+        result = cursor.fetchone()
+        print(f"Результат запроса к базе данных: {result}")
+        if result:
+            name, publisher, universe, type_, desc, link, art = result
+            buttons = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Арт", url=art)]
+            ])
+            await callback_query.message.reply(
+                f"🦸 {name}\n📚 Издатель: {publisher}\n🌌 Вселенная: {universe}\n🦸 Тип: {type_}\n📖 {desc}\n📜 Пост: {link}",
+                reply_markup=buttons
+            )
+            print(f"Пользователь {callback_query.from_user.id}: информация о персонаже {name} отправлена")
+        else:
+            await callback_query.message.reply("Персонаж не найден в базе данных. 😔")
+            print(f"Пользователь {callback_query.from_user.id}: персонаж {selected_name} не найден в базе данных")
+    except Exception as e:
+        print(f"Ошибка при запросе к базе данных: {e}")
+        await callback_query.message.reply(f"Произошла ошибка: {e}")
     await callback_query.answer()
 
 # Обработка комментариев в группе (ответов на пересланные посты)
