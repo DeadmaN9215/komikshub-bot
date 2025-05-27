@@ -45,30 +45,6 @@ try:
 except Exception as e:
     print(f"Ошибка при создании таблицы: {e}")
 
-# Очистка таблицы перед добавлением данных
-print("Очистка таблицы characters...")
-try:
-    cursor.execute("DELETE FROM characters")
-    print("Таблица очищена.")
-except Exception as e:
-    print(f"Ошибка при очистке таблицы: {e}")
-
-# Добавление начальных данных
-print("Добавление данных в таблицу...")
-try:
-    cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
-                   ("Человек-паук Нуар", "Marvel", "Marvel Noir", "Герой",
-                    "Мрачный Питер Паркер из 1930-х, мститель с револьвером.",
-                    "https://t.me/KomicsHub/3", "https://t.me/KomicsHub/4"))
-    cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
-                   ("Спаун", "Image", "Spawn Universe", "Антигерой",
-                    "Эл Симмонс, наемник, ставший мстителем ада с цепями.",
-                    "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
-    conn.commit()
-    print("Данные успешно добавлены.")
-except Exception as e:
-    print(f"Ошибка при добавлении данных: {e}")
-
 # Проверка содержимого базы данных
 print("Проверка содержимого базы данных...")
 try:
@@ -76,11 +52,22 @@ try:
     results = cursor.fetchall()
     print(f"Данные в базе: {results}")
     if not results:
-        print("ВНИМАНИЕ: База данных пуста!")
+        print("ВНИМАНИЕ: База данных пуста! Добавляем начальные данные...")
+        # Добавление начальных данных только если база пуста
+        cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       ("Человек-паук Нуар", "Marvel", "Marvel Noir", "Герой",
+                        "Мрачный Питер Паркер из 1930-х, мститель с револьвером.",
+                        "https://t.me/KomicsHub/3", "https://t.me/KomicsHub/4"))
+        cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       ("Спаун", "Image", "Spawn Universe", "Антигерой",
+                        "Эл Симмонс, наемник, ставший мстителем ада с цепями.",
+                        "https://t.me/komikshub/post2", "https://example.com/art2.jpg"))
+        conn.commit()
+        print("Начальные данные успешно добавлены.")
 except Exception as e:
     print(f"Ошибка при проверке содержимого базы данных: {e}")
 
-# Создание главного меню с кнопками (убрали кнопку "Кроссовер")
+# Создание главного меню с кнопками (без кроссовера)
 menu = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="🔍 Поиск", callback_data="search")],
     [InlineKeyboardButton(text="🎲 Случайный", callback_data="random")]
@@ -285,7 +272,6 @@ async def handle_search_query(message: types.Message, state: FSMContext):
                 reply_markup=buttons
             )
             print(f"Пользователь {message.from_user.id}: найден 1 персонаж: {name}")
-            await state.clear()  # Сбрасываем состояние после успешного поиска
         else:
             buttons = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=f"{result[0]} ({result[1]})", callback_data=f"select_{result[0]}")] for result in results
@@ -295,9 +281,10 @@ async def handle_search_query(message: types.Message, state: FSMContext):
     else:
         await message.reply("Персонаж не найден! Попробуй другой запрос. 😎")
         print(f"Пользователь {message.from_user.id}: персонажи не найдены для запроса '{query}'")
-        await state.clear()  # Сбрасываем состояние, если ничего не найдено
 
-    print(f"Пользователь {message.from_user.id}: текущее состояние после обработки: {await state.get_state()}")
+    # Сбрасываем состояние после обработки
+    await state.clear()
+    print(f"Пользователь {message.from_user.id}: состояние сброшено, текущее состояние: {await state.get_state()}")
 
 # Обработка выбора персонажа из списка
 @dp.callback_query(lambda c: c.data.startswith("select_"))
