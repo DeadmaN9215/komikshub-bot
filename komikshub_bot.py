@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import asyncio
+import threading
 from fastapi import FastAPI
 from starlette.responses import PlainTextResponse
 from aiogram import Bot, Dispatcher, types
@@ -413,14 +414,18 @@ async def handle_text(message: types.Message, state: FSMContext):
 async def health():
     return PlainTextResponse(content="The bot is running fine :)")
 
-# Запуск бота через polling и FastAPI
-async def main():
-    # Запуск polling в отдельной задаче
-    asyncio.create_task(dp.start_polling(bot))
-    # Запуск FastAPI-сервера для health checks
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)), workers=1)
-    server = uvicorn.Server(config)
-    await server.serve()
+# Функция для запуска polling в отдельном потоке
+def start_polling():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(dp.start_polling(bot))
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Запускаем polling в отдельном потоке
+    polling_thread = threading.Thread(target=start_polling, daemon=True)
+    polling_thread.start()
+
+    # Запускаем FastAPI-сервер для health checks
+    config = uvicorn.Config(app=app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)), workers=1)
+    server = uvicorn.Server(config)
+    asyncio.run(server.serve())
