@@ -1,16 +1,13 @@
 import os
 import sqlite3
 import asyncio
-import threading
-from fastapi import FastAPI
-from starlette.responses import PlainTextResponse
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from fuzzywuzzy import fuzz
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-import uvicorn
 
 # Определяем состояния для FSM
 class SearchStates(StatesGroup):
@@ -25,8 +22,7 @@ class AddCharacterStates(StatesGroup):
     waiting_for_post_link = State()
     waiting_for_art_link = State()
 
-# Инициализация FastAPI и aiogram
-app = FastAPI()
+# Инициализация aiogram
 bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
 dp = Dispatcher()
 
@@ -71,7 +67,7 @@ try:
     conn.commit()
     print("Данные успешно добавлены.")
 except Exception as e:
-    print(f"Ошибка при добавлении данных: {e}")
+    print(f"Ошибка при добавления данных: {e}")
 
 # Проверка содержимого базы данных
 print("Проверка содержимого базы данных...")
@@ -409,23 +405,26 @@ async def handle_text(message: types.Message, state: FSMContext):
     await state.set_state(SearchStates.waiting_for_query)
     print(f"Пользователь {message.from_user.id} перешёл в режим поиска")
 
-# Минимальный эндпоинт для health checks Render
-@app.get("/healthcheck")
-async def health():
-    return PlainTextResponse(content="The bot is running fine :)")
+# Минимальный HTTP-сервер для health checks Render
+async def handle_health(request):
+    return web.Response(text="The bot is running fine :)")
 
-# Функция для запуска polling в отдельном потоке
-def start_polling():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(dp.start_polling(bot))
+# Настройка HTTP-сервера
+web_app = web.Application()
+web_app.add_routes([web.get('/healthcheck', handle_health)])
+
+# Запуск polling и HTTP-сервера
+async def main():
+    # Запуск HTTP-сервера для health checks
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8000))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    print(f"HTTP server running on http://0.0.0.0:{port}")
+
+    # Запуск polling
+    await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    # Запускаем polling в отдельном потоке
-    polling_thread = threading.Thread(target=start_polling, daemon=True)
-    polling_thread.start()
-
-    # Запускаем FastAPI-сервер для health checks
-    config = uvicorn.Config(app=app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)), workers=1)
-    server = uvicorn.Server(config)
-    asyncio.run(server.serve())
+    asyncio.run(main())
