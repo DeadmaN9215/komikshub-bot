@@ -29,7 +29,7 @@ bot = Bot(token=os.getenv("TELEGRAM_TOKEN"))
 dp = Dispatcher()
 
 # Публичная ссылка на файл базы данных в Mail.ru Cloud
-DATABASE_URL = "https://cloud.mail.ru/public/BNwh/Hq44eaDD8"  # Замени на свою публичную ссылку
+DATABASE_URL = "https://cloud.mail.ru/public/3VX7/ppkUqGWHF"  # Замени на свою публичную ссылку
 
 # Настройки WebDAV для Mail.ru Cloud
 webdav_options = {
