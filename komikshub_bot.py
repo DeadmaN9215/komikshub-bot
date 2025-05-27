@@ -1,7 +1,8 @@
 import os
 import sqlite3
 import asyncio
-import requests  # Добавляем библиотеку для скачивания файла
+import requests
+from webdav3.client import Client  # Добавляем библиотеку для WebDAV
 from aiohttp import web
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command, CommandStart
@@ -29,6 +30,14 @@ dp = Dispatcher()
 
 # Публичная ссылка на файл базы данных в Mail.ru Cloud
 DATABASE_URL = "https://cloud.mail.ru/public/BNwh/Hq44eaDD8"  # Замени на свою публичную ссылку
+
+# Настройки WebDAV для Mail.ru Cloud
+webdav_options = {
+    'webdav_hostname': "https://webdav.cloud.mail.ru",
+    'webdav_login': "deadman_15@mail.ru",  # Замени на свой email
+    'webdav_password': "XkxpTJwpN3ifucfSAh6v"     # Замени на свой пароль для WebDAV
+}
+webdav_client = Client(webdav_options)
 
 # Скачивание файла базы данных из облака
 print("Скачивание базы данных из облака...")
@@ -81,6 +90,15 @@ def ensure_database_populated():
     except Exception as e:
         print(f"Ошибка при проверке содержимого базы данных: {e}")
 
+# Функция для загрузки файла базы данных в облако
+def upload_database_to_cloud():
+    print("Загрузка базы данных в облако...")
+    try:
+        webdav_client.upload_sync(remote_path="/BDCharter/comics_characters.db", local_path="comics_characters.db")
+        print("База данных успешно загружена в облако.")
+    except Exception as e:
+        print(f"Ошибка при загрузке базы данных в облако: {e}")
+
 # Вызываем функцию при запуске
 ensure_database_populated()
 
@@ -103,6 +121,123 @@ async def cancel(message: types.Message, state: FSMContext):
     print(f"Получена команда /cancel от пользователя {message.from_user.id}")
     await state.clear()
     await message.reply("Поиск завершён. Используй /start, чтобы начать заново. 😊")
+
+# Команда /addcharacter (только для администратора)
+@dp.message(Command(commands=["addcharacter"]))
+async def add_character_start(message: types.Message, state: FSMContext):
+    admin_id = 376742720  # Твой Telegram ID
+    if message.from_user.id != admin_id:
+        print(f"Пользователь {message.from_user.id} попытался использовать /addcharacter, но доступ запрещён")
+        return  # Игнорируем команду, если пользователь не администратор
+
+    print(f"Получена команда /addcharacter от администратора {message.from_user.id}")
+    await state.clear()  # Сбрасываем состояние
+    await state.set_state(AddCharacterStates.waiting_for_name)
+    await message.reply("Введите имя персонажа (например, Человек-паук Нуар):")
+
+# Обработка имени персонажа
+@dp.message(AddCharacterStates.waiting_for_name)
+async def process_name(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    name = message.text.strip()
+    await state.update_data(name=name)
+    await state.set_state(AddCharacterStates.waiting_for_publisher)
+    await message.reply("Введите издателя (например, Marvel):")
+
+# Обработка издателя
+@dp.message(AddCharacterStates.waiting_for_publisher)
+async def process_publisher(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    publisher = message.text.strip()
+    await state.update_data(publisher=publisher)
+    await state.set_state(AddCharacterStates.waiting_for_universe)
+    await message.reply("Введите вселенную (например, Marvel Noir):")
+
+# Обработка вселенной
+@dp.message(AddCharacterStates.waiting_for_universe)
+async def process_universe(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    universe = message.text.strip()
+    await state.update_data(universe=universe)
+    await state.set_state(AddCharacterStates.waiting_for_type)
+    await message.reply("Введите тип персонажа (например, Герой, Антигерой, Злодей):")
+
+# Обработка типа
+@dp.message(AddCharacterStates.waiting_for_type)
+async def process_type(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    type_ = message.text.strip()
+    await state.update_data(type=type_)
+    await state.set_state(AddCharacterStates.waiting_for_description)
+    await message.reply("Введите описание персонажа (например, Мрачный Питер Паркер из 1930-х...):")
+
+# Обработка описания
+@dp.message(AddCharacterStates.waiting_for_description)
+async def process_description(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    description = message.text.strip()
+    await state.update_data(description=description)
+    await state.set_state(AddCharacterStates.waiting_for_post_link)
+    await message.reply("Введите ссылку на пост (например, https://t.me/KomicsHub/3):")
+
+# Обработка ссылки на пост
+@dp.message(AddCharacterStates.waiting_for_post_link)
+async def process_post_link(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    post_link = message.text.strip()
+    await state.update_data(post_link=post_link)
+    await state.set_state(AddCharacterStates.waiting_for_art_link)
+    await message.reply("Введите ссылку на арт (например, https://example.com/art.jpg):")
+
+# Обработка ссылки на арт и сохранение персонажа
+@dp.message(AddCharacterStates.waiting_for_art_link)
+async def process_art_link(message: types.Message, state: FSMContext):
+    admin_id = 376742720
+    if message.from_user.id != admin_id:
+        return
+
+    art_link = message.text.strip()
+    data = await state.get_data()
+    name = data["name"]
+    publisher = data["publisher"]
+    universe = data["universe"]
+    type_ = data["type"]
+    description = data["description"]
+    post_link = data["post_link"]
+
+    # Сохраняем персонажа в базу данных
+    try:
+        cursor.execute("INSERT INTO characters VALUES (?, ?, ?, ?, ?, ?, ?)",
+                       (name, publisher, universe, type_, description, post_link, art_link))
+        conn.commit()
+        await message.reply(f"Персонаж {name} успешно добавлен! 🎉")
+        print(f"Администратор {message.from_user.id} добавил персонажа: {name}")
+
+        # Загружаем обновлённую базу данных в облако
+        upload_database_to_cloud()
+    except Exception as e:
+        await message.reply(f"Ошибка при добавлении персонажа: {e}")
+        print(f"Ошибка при добавлении персонажа администратором {message.from_user.id}: {e}")
+
+    await state.clear()
 
 # Обработка кнопок главного меню
 @dp.callback_query()
