@@ -80,11 +80,10 @@ try:
 except Exception as e:
     print(f"Ошибка при проверке содержимого базы данных: {e}")
 
-# Создание главного меню с кнопками
+# Создание главного меню с кнопками (убрали кнопку "Кроссовер")
 menu = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text="🔍 Поиск", callback_data="search")],
-    [InlineKeyboardButton(text="🎲 Случайный", callback_data="random")],
-    [InlineKeyboardButton(text="⚔️ Кроссовер", callback_data="crossover")]
+    [InlineKeyboardButton(text="🎲 Случайный", callback_data="random")]
 ])
 
 # Команда /start
@@ -243,32 +242,6 @@ async def handle_buttons(callback_query: types.CallbackQuery, state: FSMContext)
         else:
             await callback_query.message.reply("Персонажи не найдены. База данных пуста. 😔")
             print("Случайный персонаж не найден: база данных пуста")
-    elif data == "crossover":
-        print(f"Выполняется запрос на кроссовер...")
-        cursor.execute("SELECT * FROM characters ORDER BY RANDOM() LIMIT 2")
-        fighters = cursor.fetchall()
-        if len(fighters) == 2:
-            fighter1, fighter2 = fighters[0], fighters[1]
-            buttons = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=fighter1[0], callback_data=f"vote_{fighter1[0]}"),
-                 InlineKeyboardButton(text=fighter2[0], callback_data=f"vote_{fighter2[0]}")]
-            ])
-            await callback_query.message.reply(
-                f"⚔️ Кроссовер: {fighter1[0]} vs. {fighter2[0]} — кто победит? 😈",
-                reply_markup=buttons
-            )
-            print(f"Кроссовер создан: {fighter1[0]} vs. {fighter2[0]}")
-        else:
-            await callback_query.message.reply("Недостаточно персонажей для кроссовера. Добавьте больше персонажей! 😔")
-            print("Кроссовер не создан: недостаточно персонажей")
-
-# Обработка голосования в кроссовере
-@dp.callback_query(lambda c: c.data.startswith("vote_"))
-async def process_vote(callback_query: types.CallbackQuery):
-    winner = callback_query.data.split("_")[1]
-    print(f"Пользователь {callback_query.from_user.id} проголосовал за {winner}")
-    await callback_query.message.reply(f"Ты выбрал {winner}! Спасибо за голос! 🏆")
-    await callback_query.answer()
 
 # Обработка текстовых сообщений (поиск в личных чатах)
 @dp.message(SearchStates.waiting_for_query)
@@ -353,61 +326,11 @@ async def handle_selection(callback_query: types.CallbackQuery):
         await callback_query.message.reply(f"Произошла ошибка: {e}")
     await callback_query.answer()
 
-# Обработка комментариев в группе (ответов на пересланные посты)
-@dp.message(lambda message: message.reply_to_message is not None and message.chat.type in ["group", "supergroup"])
-async def handle_comment(message: types.Message, state: FSMContext):
-    if message.reply_to_message and message.reply_to_message.from_user.id == bot.id:
-        query = message.text.lower().strip().replace("-", " ").replace("  ", " ")
-        query_parts = query.split()
-        print(f"Комментарий пользователя {message.from_user.id} в группе: {query} (разбит на части: {query_parts})")
-
-        cursor.execute("SELECT * FROM characters")
-        all_characters = cursor.fetchall()
-        results = []
-
-        for character in all_characters:
-            name, publisher, universe, type_, desc, link, art = character
-            combined_text = f"{name} {publisher} {universe} {type_}".lower()
-            max_score = 0
-            for part in query_parts:
-                score = fuzz.partial_ratio(part, combined_text)
-                if score > max_score:
-                    max_score = score
-            if max_score >= 70:
-                results.append(character)
-                print(f"Персонаж {name} найден с уровнем сходства {max_score}%")
-
-        print(f"Найдено записей: {len(results)}")
-        print(f"Результаты: {results}")
-
-        if results:
-            if len(results) == 1:
-                name, publisher, universe, type_, desc, link, art = results[0]
-                buttons = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="Арт", url=art)]
-                ])
-                await message.reply(
-                    f"🦸 {name}\n📚 Издатель: {publisher}\n🌌 Вселенная: {universe}\n🦸 Тип: {type_}\n📖 {desc}\n📜 Пост: {link}",
-                    reply_markup=buttons, reply_to_message_id=message.message_id
-                )
-                print(f"Пользователь {message.from_user.id}: найден 1 персонаж: {name}")
-            else:
-                buttons = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=f"{result[0]} ({result[1]})", callback_data=f"select_{result[0]}")] for result in results
-                ])
-                await message.reply("Найдено несколько персонажей. Выбери одного:",
-                                   reply_markup=buttons, reply_to_message_id=message.message_id)
-                print(f"Пользователь {message.from_user.id}: найдено несколько персонажей: {[result[0] for result in results]}")
-        else:
-            await message.reply("Информации о таком персонаже нет. 😔",
-                               reply_to_message_id=message.message_id)
-            print(f"Пользователь {message.from_user.id}: персонажи не найдены для запроса '{query}'")
-    else:
-        print(f"Сообщение пользователя {message.from_user.id} в группе не является комментарием: {message.text}")
-
 # Обработка текстовых сообщений, когда пользователь не в режиме поиска
 @dp.message()
 async def handle_text(message: types.Message, state: FSMContext):
+    print(f"Пользователь {message.from_user.id} ввёл текст: {message.text}")
+    # Игнорируем сообщения в группах
     if message.chat.type in ["group", "supergroup"]:
         print(f"Сообщение пользователя {message.from_user.id} в группе проигнорировано: {message.text}")
         return
